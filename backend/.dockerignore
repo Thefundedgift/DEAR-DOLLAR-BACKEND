@@ -1,0 +1,15 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+uploads
+*.log
+.git
+test
+coverage
+server.py
+start_services.sh
+requirements.txt
+__pycache__
+pytest.ini

@@ -1,0 +1,360 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+}
+
+enum TxDirection {
+  CREDIT
+  DEBIT
+}
+
+enum TxStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum MoneyTxType {
+  UPI_DEPOSIT
+  POINT_PURCHASE
+  POINT_SELL
+  REFUND
+  ADJUSTMENT
+  SETTLEMENT
+}
+
+enum DollarTxType {
+  DOLLAR_PURCHASE
+  DOLLAR_SELL
+  REFUND
+  ADJUSTMENT
+}
+
+enum ListingStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+}
+
+enum OrderStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum DepositStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum SocialPlatform {
+  TELEGRAM
+  DISCORD
+}
+
+model User {
+  id           String     @id @default(uuid())
+  mobile       String     @unique
+  name         String?
+  passwordHash String     @map("password_hash")
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  moneyWallet   MoneyWallet?
+  dollarWallet  DollarWallet?
+  buyOrders     BuyOrder[]
+  sellOrders    SellOrder[]
+  deposits      Deposit[]
+  bankDetails   BankDetail[]
+  resetTokens   PasswordResetToken[]
+
+  @@map("users")
+}
+
+model Admin {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  name         String
+  passwordHash String    @map("password_hash")
+  role         AdminRole @default(ADMIN)
+  permissions  String[]  @default([])
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("admins")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique @map("token_hash")
+  ownerType String    @map("owner_type")
+  ownerId   String    @map("owner_id")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([ownerType, ownerId])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash        String    @unique @map("token_hash")
+  expiresAt        DateTime  @map("expires_at")
+  usedAt           DateTime? @map("used_at")
+  createdByAdminId String?   @map("created_by_admin_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@map("password_reset_tokens")
+}
+
+model MoneyWallet {
+  id               String   @id @default(uuid())
+  userId           String   @unique @map("user_id")
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  availableBalance Decimal  @default(0) @map("available_balance") @db.Decimal(18, 2)
+  pendingBalance   Decimal  @default(0) @map("pending_balance") @db.Decimal(18, 2)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  transactions MoneyWalletTransaction[]
+
+  @@map("money_wallets")
+}
+
+model MoneyWalletTransaction {
+  id           String      @id @default(uuid())
+  walletId     String      @map("wallet_id")
+  wallet       MoneyWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type         MoneyTxType
+  direction    TxDirection
+  amount       Decimal     @db.Decimal(18, 2)
+  balanceAfter Decimal     @map("balance_after") @db.Decimal(18, 2)
+  status       TxStatus    @default(COMPLETED)
+  reference    String?
+  description  String?
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  @@index([walletId, createdAt])
+  @@map("money_wallet_transactions")
+}
+
+model DollarWallet {
+  id              String   @id @default(uuid())
+  userId          String   @unique @map("user_id")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  availablePoints Decimal  @default(0) @map("available_points") @db.Decimal(18, 2)
+  pendingPoints   Decimal  @default(0) @map("pending_points") @db.Decimal(18, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  transactions DollarWalletTransaction[]
+
+  @@map("dollar_wallets")
+}
+
+model DollarWalletTransaction {
+  id                String       @id @default(uuid())
+  walletId          String       @map("wallet_id")
+  wallet            DollarWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type              DollarTxType
+  direction         TxDirection
+  points            Decimal      @db.Decimal(18, 2)
+  rateAtTransaction Decimal      @map("rate_at_transaction") @db.Decimal(18, 6)
+  moneyValue        Decimal      @map("money_value") @db.Decimal(18, 2)
+  balanceAfter      Decimal      @map("balance_after") @db.Decimal(18, 2)
+  status            TxStatus     @default(COMPLETED)
+  referenceId       String?      @map("reference_id")
+  description       String?
+  createdAt         DateTime     @default(now()) @map("created_at")
+
+  @@index([walletId, createdAt])
+  @@map("dollar_wallet_transactions")
+}
+
+model BuyListing {
+  id                String        @id @default(uuid())
+  title             String
+  description       String?
+  moneyValue        Decimal       @map("money_value") @db.Decimal(18, 2)
+  pointQuantity     Decimal       @map("point_quantity") @db.Decimal(18, 2)
+  availableQuantity Decimal       @map("available_quantity") @db.Decimal(18, 2)
+  remainingQuantity Decimal       @map("remaining_quantity") @db.Decimal(18, 2)
+  startDate         DateTime      @map("start_date")
+  endDate           DateTime      @map("end_date")
+  status            ListingStatus @default(ACTIVE)
+  createdById       String        @map("created_by")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  orders BuyOrder[]
+
+  @@map("buy_listings")
+}
+
+model DemandListing {
+  id                String        @id @default(uuid())
+  title             String
+  description       String?
+  moneyValue        Decimal       @map("money_value") @db.Decimal(18, 2)
+  pointQuantity     Decimal       @map("point_quantity") @db.Decimal(18, 2)
+  availableQuantity Decimal       @map("available_quantity") @db.Decimal(18, 2)
+  remainingQuantity Decimal       @map("remaining_quantity") @db.Decimal(18, 2)
+  startDate         DateTime      @map("start_date")
+  endDate           DateTime      @map("end_date")
+  status            ListingStatus @default(ACTIVE)
+  createdById       String        @map("created_by")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  orders SellOrder[]
+
+  @@map("demand_listings")
+}
+
+model BuyOrder {
+  id                   String      @id @default(uuid())
+  userId               String      @map("user_id")
+  user                 User        @relation(fields: [userId], references: [id])
+  listingId            String      @map("listing_id")
+  listing              BuyListing  @relation(fields: [listingId], references: [id])
+  points               Decimal     @db.Decimal(18, 2)
+  listingMoneyValue    Decimal     @map("listing_money_value") @db.Decimal(18, 2)
+  listingPointQuantity Decimal     @map("listing_point_quantity") @db.Decimal(18, 2)
+  rate                 Decimal     @db.Decimal(18, 6)
+  moneyAmount          Decimal     @map("money_amount") @db.Decimal(18, 2)
+  status               OrderStatus @default(PENDING)
+  idempotencyKey       String?     @map("idempotency_key")
+  approvedById         String?     @map("approved_by")
+  approvedAt           DateTime?   @map("approved_at")
+  rejectedReason       String?     @map("rejected_reason")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+
+  @@unique([userId, idempotencyKey])
+  @@index([status, createdAt])
+  @@map("buy_orders")
+}
+
+model SellOrder {
+  id                   String        @id @default(uuid())
+  userId               String        @map("user_id")
+  user                 User          @relation(fields: [userId], references: [id])
+  listingId            String        @map("listing_id")
+  listing              DemandListing @relation(fields: [listingId], references: [id])
+  points               Decimal       @db.Decimal(18, 2)
+  listingMoneyValue    Decimal       @map("listing_money_value") @db.Decimal(18, 2)
+  listingPointQuantity Decimal       @map("listing_point_quantity") @db.Decimal(18, 2)
+  rate                 Decimal       @db.Decimal(18, 6)
+  moneyAmount          Decimal       @map("money_amount") @db.Decimal(18, 2)
+  status               OrderStatus   @default(PENDING)
+  idempotencyKey       String?       @map("idempotency_key")
+  approvedById         String?       @map("approved_by")
+  approvedAt           DateTime?     @map("approved_at")
+  rejectedReason       String?       @map("rejected_reason")
+  createdAt            DateTime      @default(now()) @map("created_at")
+  updatedAt            DateTime      @updatedAt @map("updated_at")
+
+  @@unique([userId, idempotencyKey])
+  @@index([status, createdAt])
+  @@map("sell_orders")
+}
+
+model PaymentSettings {
+  id           String   @id @default(uuid())
+  version      Int
+  upiId        String   @map("upi_id")
+  merchantName String   @map("merchant_name")
+  qrImagePath  String?  @map("qr_image_path")
+  instructions String?
+  isActive     Boolean  @default(true) @map("is_active")
+  updatedById  String   @map("updated_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("payment_settings")
+}
+
+model Deposit {
+  id              String        @id @default(uuid())
+  userId          String        @map("user_id")
+  user            User          @relation(fields: [userId], references: [id])
+  amount          Decimal       @db.Decimal(18, 2)
+  upiIdUsed       String        @map("upi_id_used")
+  merchantName    String        @map("merchant_name")
+  qrImagePath     String?       @map("qr_image_path")
+  settingsVersion Int           @map("settings_version")
+  utr             String?
+  status          DepositStatus @default(PENDING)
+  submittedAt     DateTime?     @map("submitted_at")
+  verifiedById    String?       @map("verified_by")
+  verifiedAt      DateTime?     @map("verified_at")
+  rejectedReason  String?       @map("rejected_reason")
+  idempotencyKey  String?       @map("idempotency_key")
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@unique([userId, idempotencyKey])
+  @@index([status, createdAt])
+  @@map("deposits")
+}
+
+model BankDetail {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountHolder String   @map("account_holder")
+  bankName      String   @map("bank_name")
+  accountNumber String   @map("account_number")
+  ifsc          String
+  upiId         String?  @map("upi_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("bank_details")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  adminId    String?  @map("admin_id")
+  action     String
+  entityType String?  @map("entity_type")
+  entityId   String?  @map("entity_id")
+  details    Json?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}
+
+model SocialLink {
+  id          String         @id @default(uuid())
+  platform    SocialPlatform @unique
+  url         String
+  enabled     Boolean        @default(false)
+  updatedById String?        @map("updated_by")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  @@map("social_links")
+}
