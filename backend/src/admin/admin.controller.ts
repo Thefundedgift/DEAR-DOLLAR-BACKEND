@@ -19,6 +19,7 @@ import { extname } from 'path';
 import { randomUUID } from 'crypto';
 import { AdminGuard, PermissionsGuard, RequirePermissions, SuperAdminOnly } from '../common/guards';
 import {
+  ApproveWithdrawalDto,
   CreateAdminDto,
   CreateListingDto,
   PaymentSettingsDto,
@@ -205,6 +206,28 @@ export class AdminPaymentsController {
   @Post(':id/reject')
   reject(@Req() req: any, @Param('id', ParseUUIDPipe) id: string, @Body() dto: RejectDto) {
     return this.admin.rejectDeposit(req.admin.id, id, dto.reason, getClientIp(req));
+  }
+}
+
+@Controller('admin/withdrawals')
+@UseGuards(AdminGuard, PermissionsGuard)
+@RequirePermissions('VERIFY_PAYMENTS')
+export class AdminWithdrawalsController {
+  constructor(private admin: AdminService) {}
+
+  @Get()
+  list(@Query('status') status?: string) {
+    return this.admin.listWithdrawals(status);
+  }
+
+  @Post(':id/approve')
+  approve(@Req() req: any, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ApproveWithdrawalDto) {
+    return this.admin.approveWithdrawal(req.admin.id, id, dto.payoutReference, getClientIp(req));
+  }
+
+  @Post(':id/reject')
+  reject(@Req() req: any, @Param('id', ParseUUIDPipe) id: string, @Body() dto: RejectDto) {
+    return this.admin.rejectWithdrawal(req.admin.id, id, dto.reason, getClientIp(req));
   }
 }
 

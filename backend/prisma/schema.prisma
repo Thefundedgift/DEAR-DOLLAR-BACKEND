@@ -64,6 +64,12 @@ enum DepositStatus {
   REJECTED
 }
 
+enum WithdrawalStatus {
+  PENDING
+  COMPLETED
+  REJECTED
+}
+
 enum SocialPlatform {
   TELEGRAM
   DISCORD
@@ -83,6 +89,7 @@ model User {
   buyOrders     BuyOrder[]
   sellOrders    SellOrder[]
   deposits      Deposit[]
+  withdrawals   Withdrawal[]
   bankDetails   BankDetail[]
   resetTokens   PasswordResetToken[]
 
@@ -316,6 +323,30 @@ model Deposit {
   @@unique([userId, idempotencyKey])
   @@index([status, createdAt])
   @@map("deposits")
+}
+
+model Withdrawal {
+  id              String           @id @default(uuid())
+  userId          String           @map("user_id")
+  user            User             @relation(fields: [userId], references: [id])
+  amount          Decimal          @db.Decimal(18, 2)
+  bankDetailId    String           @map("bank_detail_id")
+  accountHolder   String           @map("account_holder")
+  bankName        String           @map("bank_name")
+  accountNumber   String           @map("account_number")
+  ifsc            String
+  upiId           String?          @map("upi_id")
+  status          WithdrawalStatus @default(PENDING)
+  payoutReference String?          @map("payout_reference")
+  processedById   String?          @map("processed_by")
+  processedAt     DateTime?        @map("processed_at")
+  rejectedReason  String?          @map("rejected_reason")
+  idempotencyKey  String?          @map("idempotency_key")
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  @@unique([userId, idempotencyKey])
+  @@index([status, createdAt])
+  @@map("withdrawals")
 }
 
 model BankDetail {

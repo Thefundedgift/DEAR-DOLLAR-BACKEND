@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Headers, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { CustomerGuard } from '../common/guards';
-import { CreateDepositDto, SubmitUtrDto } from '../common/dto';
+import { CreateDepositDto, CreateWithdrawalDto, SubmitUtrDto } from '../common/dto';
 import { WalletService } from './wallet.service';
 import { PrismaService } from '../prisma.service';
 
@@ -40,6 +40,16 @@ export class WalletController {
   @Post('deposits/:id/utr')
   submitUtr(@Req() req: any, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SubmitUtrDto) {
     return this.wallet.submitUtr(req.user.id, id, dto.utr);
+  }
+
+  @Post('withdrawals')
+  createWithdrawal(@Req() req: any, @Body() dto: CreateWithdrawalDto, @Headers('idempotency-key') idemKey?: string) {
+    return this.wallet.createWithdrawal(req.user.id, dto.amount, dto.bankDetailId, idemKey);
+  }
+
+  @Get('withdrawals')
+  listWithdrawals(@Req() req: any) {
+    return this.wallet.listWithdrawals(req.user.id);
   }
 }
 

@@ -29,6 +29,7 @@ import {
   AdminReportsController,
   AdminSellOrdersController,
   AdminUsersController,
+  AdminWithdrawalsController,
 } from './admin/admin.controller';
 
 @Module({
@@ -52,6 +53,7 @@ import {
     AdminBuyOrdersController,
     AdminSellOrdersController,
     AdminPaymentsController,
+    AdminWithdrawalsController,
     AdminPaymentSettingsController,
     AdminReportsController,
     AdminAuditLogsController,

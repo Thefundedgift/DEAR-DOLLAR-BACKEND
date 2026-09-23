@@ -88,6 +88,23 @@ export class SubmitUtrDto {
   utr: string;
 }
 
+export class CreateWithdrawalDto {
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(DEPOSIT_MIN, { message: `Minimum withdrawal is ₹${DEPOSIT_MIN}` })
+  @Max(DEPOSIT_MAX, { message: `Maximum withdrawal is ₹${DEPOSIT_MAX}` })
+  amount: number;
+
+  @IsUUID()
+  bankDetailId: string;
+}
+
+export class ApproveWithdrawalDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  payoutReference?: string;
+}
+
 export class CreateOrderDto {
   @IsUUID()
   listingId: string;

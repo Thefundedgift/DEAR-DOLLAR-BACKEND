@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DollarTxType, MoneyTxType, Prisma, TxStatus } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma.service';
-import { dec } from '../common/calc';
+import { dec, maskAccountNumber } from '../common/calc';
 
 type Tx = Prisma.TransactionClient;
 
@@ -104,5 +105,56 @@ export class WalletService {
   async listDeposits(userId: string) {
     const deposits = await this.prisma.deposit.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 100 });
     return deposits.map((d) => this.depositView(d));
+  }
+
+  withdrawalView(w: any) {
+    return {
+      id: w.id,
+      amount: w.amount,
+      accountHolder: w.accountHolder,
+      bankName: w.bankName,
+      accountNumber: maskAccountNumber(w.accountNumber),
+      ifsc: w.ifsc,
+      upiId: w.upiId,
+      status: w.status,
+      payoutReference: w.payoutReference,
+      rejectedReason: w.rejectedReason,
+      processedAt: w.processedAt,
+      createdAt: w.createdAt,
+    };
+  }
+
+  async createWithdrawal(userId: string, amount: number, bankDetailId: string, idempotencyKey?: string) {
+    if (idempotencyKey) {
+      const existing = await this.prisma.withdrawal.findUnique({ where: { userId_idempotencyKey: { userId, idempotencyKey } } });
+      if (existing) return this.withdrawalView(existing);
+    }
+    const bank = await this.prisma.bankDetail.findFirst({ where: { id: bankDetailId, userId } });
+    if (!bank) throw new NotFoundException('Bank detail not found. Save your bank account first.');
+    const amountDec = dec(amount);
+    const withdrawal = await this.prisma.$transaction(async (tx) => {
+      const withdrawalId = randomUUID();
+      await this.debitMoney(tx, userId, amountDec, 'SETTLEMENT', withdrawalId, 'PENDING', `Withdrawal to ${bank.bankName} a/c ending ${bank.accountNumber.slice(-4)}`);
+      return tx.withdrawal.create({
+        data: {
+          id: withdrawalId,
+          userId,
+          amount: amountDec,
+          bankDetailId: bank.id,
+          accountHolder: bank.accountHolder,
+          bankName: bank.bankName,
+          accountNumber: bank.accountNumber,
+          ifsc: bank.ifsc,
+          upiId: bank.upiId,
+          idempotencyKey: idempotencyKey || null,
+        },
+      });
+    }, { timeout: 15000 });
+    return this.withdrawalView(withdrawal);
+  }
+
+  async listWithdrawals(userId: string) {
+    const items = await this.prisma.withdrawal.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 100 });
+    return items.map((w) => this.withdrawalView(w));
   }
 }

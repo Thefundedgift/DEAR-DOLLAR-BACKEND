@@ -193,6 +193,47 @@ export class AdminService {
     return { message: 'Deposit rejected', depositId };
   }
 
+  // ---------- Withdrawals ----------
+  listWithdrawals(status?: string) {
+    return this.prisma.withdrawal.findMany({
+      where: status ? { status: status as any } : {},
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: { user: { select: { id: true, mobile: true, name: true } } },
+    });
+  }
+
+  async approveWithdrawal(adminId: string, withdrawalId: string, payoutReference?: string, ip?: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.withdrawal.updateMany({
+        where: { id: withdrawalId, status: 'PENDING' },
+        data: { status: 'COMPLETED', processedById: adminId, processedAt: new Date(), payoutReference: payoutReference || null },
+      });
+      if (!claimed.count) throw new ConflictException('Withdrawal is not pending (already processed?)');
+      const withdrawal = await tx.withdrawal.findUnique({ where: { id: withdrawalId } });
+      await tx.moneyWalletTransaction.updateMany({ where: { reference: withdrawalId, status: 'PENDING' }, data: { status: 'COMPLETED' } });
+      return withdrawal;
+    }, { timeout: 15000 });
+    await this.audit.log({ adminId, action: 'WITHDRAWAL_APPROVED', entityType: 'Withdrawal', entityId: withdrawalId, details: { amount: result.amount, payoutReference }, ip });
+    return { message: 'Withdrawal approved and marked as paid', withdrawalId };
+  }
+
+  async rejectWithdrawal(adminId: string, withdrawalId: string, reason?: string, ip?: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.withdrawal.updateMany({
+        where: { id: withdrawalId, status: 'PENDING' },
+        data: { status: 'REJECTED', processedById: adminId, processedAt: new Date(), rejectedReason: reason || null },
+      });
+      if (!claimed.count) throw new ConflictException('Withdrawal is not pending (already processed?)');
+      const withdrawal = await tx.withdrawal.findUnique({ where: { id: withdrawalId } });
+      await tx.moneyWalletTransaction.updateMany({ where: { reference: withdrawalId, status: 'PENDING' }, data: { status: 'REVERSED' } });
+      await this.wallet.creditMoney(tx, withdrawal.userId, withdrawal.amount, 'REFUND', withdrawalId, 'COMPLETED', 'Withdrawal rejected - refund');
+      return withdrawal;
+    }, { timeout: 15000 });
+    await this.audit.log({ adminId, action: 'WITHDRAWAL_REJECTED', entityType: 'Withdrawal', entityId: withdrawalId, details: { amount: result.amount, reason }, ip });
+    return { message: 'Withdrawal rejected and amount refunded', withdrawalId };
+  }
+
   // ---------- Payment settings ----------
   async createPaymentSettings(adminId: string, dto: { upiId: string; merchantName: string; instructions?: string }, qrImagePath?: string, ip?: string) {
     const result = await this.prisma.$transaction(async (tx) => {
@@ -245,7 +286,7 @@ export class AdminService {
 
   // ---------- Reports ----------
   async reportsSummary() {
-    const [customers, activeCustomers, moneyAgg, pointsAgg, depositGroups, buyGroups, sellGroups, verifiedDeposits] = await Promise.all([
+    const [customers, activeCustomers, moneyAgg, pointsAgg, depositGroups, buyGroups, sellGroups, verifiedDeposits, withdrawalGroups] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.user.count({ where: { status: 'ACTIVE' } }),
       this.prisma.moneyWallet.aggregate({ _sum: { availableBalance: true } }),
@@ -254,11 +295,13 @@ export class AdminService {
       this.prisma.buyOrder.groupBy({ by: ['status'], _count: true, _sum: { moneyAmount: true, points: true } }),
       this.prisma.sellOrder.groupBy({ by: ['status'], _count: true, _sum: { moneyAmount: true, points: true } }),
       this.prisma.deposit.aggregate({ where: { status: 'VERIFIED' }, _sum: { amount: true } }),
+      this.prisma.withdrawal.groupBy({ by: ['status'], _count: true, _sum: { amount: true } }),
     ]);
     return {
       customers: { total: customers, active: activeCustomers },
       wallets: { totalMoneyBalance: moneyAgg._sum.availableBalance || 0, totalDollarPoints: pointsAgg._sum.availablePoints || 0 },
       deposits: { byStatus: depositGroups, totalVerifiedAmount: verifiedDeposits._sum.amount || 0 },
+      withdrawals: { byStatus: withdrawalGroups },
       buyOrders: { byStatus: buyGroups },
       sellOrders: { byStatus: sellGroups },
     };

@@ -251,6 +251,8 @@ All routes are prefixed with `/api`. Authenticated routes require `Authorization
 - `POST /api/wallet/deposits` `{amount}` (₹200–₹100000, supports `Idempotency-Key` header) → returns UPI ID / QR snapshot
 - `POST /api/wallet/deposits/:id/utr` `{utr}`
 - `GET /api/wallet/deposits` · `GET /api/payments`
+- `POST /api/wallet/withdrawals` `{amount, bankDetailId}` (₹200–₹100000; wallet debited immediately, bank details snapshotted; supports `Idempotency-Key`)
+- `GET /api/wallet/withdrawals`
 - `GET /api/payment-settings` (active UPI/QR config)
 - `GET /api/points` · `GET /api/points/transactions`
 - `GET /api/points/buy-listings` · `GET /api/points/demand-listings`
@@ -268,6 +270,7 @@ All routes are prefixed with `/api`. Authenticated routes require `Authorization
 - `GET/POST /api/admin/buy-listings` · `PATCH :id/status` (same for `demand-listings`)
 - `GET /api/admin/buy-orders` · `POST :id/approve|reject` (same for `sell-orders`)
 - `GET /api/admin/payments` · `POST :id/verify|reject`
+- `GET /api/admin/withdrawals` · `POST :id/approve` `{payoutReference?}` · `POST :id/reject` `{reason?}` (rejection auto-refunds the wallet)
 - `GET/POST /api/admin/payment-settings` (multipart: `upiId`, `merchantName`, `instructions`, `qrImage` file; versioned — historical deposits keep their snapshot)
 - `GET /api/admin/reports/summary`
 - `GET /api/admin/audit-logs`

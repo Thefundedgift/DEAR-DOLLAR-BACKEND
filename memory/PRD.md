@@ -20,12 +20,12 @@ Build a production-ready, fully self-hostable BACKEND for "DEAR DOLLAR.com" (Pow
 ## Implemented (June 2026) — all tested
 - Full API surface per spec (see /app/backend/README.md API OVERVIEW)
 - Social Links config API (admin SUPER_ADMIN manage, public returns enabled only, audit logged)
+- Withdrawals: POST/GET /api/wallet/withdrawals (₹200–₹100000, bank-detail snapshot, immediate atomic debit, idempotency); admin GET /api/admin/withdrawals + approve (payoutReference) / reject (auto-refund) under VERIFY_PAYMENTS; audit WITHDRAWAL_APPROVED/REJECTED; reports include withdrawals. Verified via curl e2e (approve, duplicate-409, reject-refund, insufficient balance, min amount, foreign bank id).
 - Jest tests: 19 passing (calc + DB transaction/concurrency/idempotency/snapshot tests)
 - Testing agent iteration_1: 33/33 backend tests passing; login endpoints fixed to return 200
 - Credentials in /app/memory/test_credentials.md
 
 ## Backlog / Next
 - P1: SMS provider integration (MSG91) for delivering password-reset OTP/tokens
-- P1: Customer withdrawal-to-bank flow (bank details exist; no withdrawal endpoint requested yet)
 - P2: Pagination/filtering polish on admin lists; CSV export for reports
 - P2: Frontend apps (customer + admin) — not in scope of this backend task
