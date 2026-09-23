@@ -1,0 +1,34 @@
+{
+  "summary": "Ran comprehensive backend test suite against DEAR DOLLAR.com NestJS backend via preview URL. 33/33 pytest test cases pass covering: health, customer registration (success/duplicate/weak-password/invalid-mobile), login + brute-force lockout, /auth/me, refresh-token rotation and reuse rejection, forgot/reset password (no-token-leak + garbage-token 401), admin login + RBAC boundaries, admin-issued customer password reset (single-use), SUPER_ADMIN wallet adjustment, UPI deposit lifecycle (min/max validation, UTR submit, admin verify, duplicate verify 409, verify-before-UTR 409), buy listing + buy order (server-calculated moneyAmount=1600 for 360 pts @ 40:9, multiple-of-9 validation, insufficient balance, approve, duplicate approve 409, reject/refund), demand/sell order (fresh customer 0-points rejected, moneyAmount=400 for 200 pts, approve), wallet + points transaction history, bank details CRUD with account-number masking and IFSC validation and cross-user isolation, customer-facing payment settings, social links (only enabled + super-admin gate), RBAC limited admin (VIEW_CUSTOMERS only -> 403 elsewhere), audit logs presence, reports summary, and buy-order idempotency-key deduping.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/register", "issue": "Strict per-IP rate limit (~5/min) makes bulk test scenarios flaky; tests now retry on 429 with backoff. Consider higher threshold in non-prod or exposing a header hint."},
+      {"endpoint": "POST /api/auth/login and /api/admin/auth/login", "issue": "Return 201 Created for a successful login; conventionally login should return 200 OK. Not breaking, but non-idiomatic."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Consider returning 200 instead of 201 for /auth/login and /admin/auth/login (semantic).",
+    "Consider raising or excluding the register endpoint from the aggressive global rate limit in test/preview environments; alternatively document the limit clearly."
+  ],
+  "critical_code_review_comments": [
+    "Auth login endpoints return 201 for successful login (should be 200 semantically).",
+    "Register endpoint is under a very aggressive rate-limiter that trips fast under normal e2e testing loads; document/tune.",
+    "All happy-path financial flows (deposits, buy, sell, refund, idempotency, rate-snapshot) behave correctly and pass RBAC/permission gates."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100% (33/33)", "frontend": "N/A (backend-only)"},
+  "test_credentials": "Admin: admin@deardollar.com / Admin@12345 ; Customer: 9876543210 / Customer@123",
+  "seed_data_creation": "Test creates on-the-fly TEST_ listings (buy + demand), several throwaway customer accounts, one limited admin (limited_<hex>@test.com / Limited@Pass1), one deposit, buy/sell orders, and social links (TELEGRAM enabled, DISCORD disabled). No cleanup performed (backend has no bulk-delete endpoints exposed).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/backend_test.py. Note the register endpoint rate limit — the helper _register() retries on 429 with backoff up to ~60s. Login endpoints return 201 (assertions accept 200/201). Admin login clears lock via redis-cli DEL cust:lock:<mobile>. Do not use MAIN_CUSTOMER_MOBILE for lockout tests. Buy listing rate is 40:9 (₹40 = 9 $DOLLAR); demand listing 20:10.",
+  "rca of the issue": "N/A — no failing functional tests. Only tooling adjustments needed (accept 201 and retry on 429)."
+}

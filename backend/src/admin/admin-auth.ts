@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpException, HttpStatus, Injectable, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpException, HttpStatus, Injectable, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma.service';
@@ -55,17 +55,20 @@ export class AdminAuthController {
   constructor(private auth: AdminAuthService) {}
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @HttpCode(200)
   @Post('login')
   login(@Body() dto: AdminLoginDto) {
     return this.auth.login(dto);
   }
 
+  @HttpCode(200)
   @Post('refresh')
   refresh(@Body() dto: RefreshDto) {
     return this.auth.refresh(dto.refreshToken);
   }
 
   @UseGuards(AdminGuard)
+  @HttpCode(200)
   @Post('logout')
   logout(@Body() dto: RefreshDto) {
     return this.auth.logout(dto.refreshToken);
